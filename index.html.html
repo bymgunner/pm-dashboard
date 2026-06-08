@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Polymarket P&L Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{--bg:#0a0a0f;--surface:#111118;--surface2:#1a1a24;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);--text:#f0f0f5;--muted:#6b6b80;--hint:#3d3d50;--green:#00d4a1;--green-dim:rgba(0,212,161,0.12);--red:#ff4d6a;--red-dim:rgba(255,77,106,0.12);--blue:#4d9fff;--blue-dim:rgba(77,159,255,0.1);--amber:#ffb347;--amber-dim:rgba(255,179,71,0.1);--purple:#a78bfa;--purple-dim:rgba(167,139,250,0.1);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;padding:2rem;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.015) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+.container{max-width:1200px;margin:0 auto;position:relative;z-index:1;}
+.header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:2rem;flex-wrap:wrap;gap:1rem;}
+.logo-area{display:flex;flex-direction:column;gap:6px;}
+.logo{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:800;letter-spacing:-0.5px;color:var(--text);}
+.logo-dot{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green);animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.6;transform:scale(.85);}}
+.wallet-badge{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:6px;width:fit-content;}
+.balance-bar{display:flex;align-items:center;gap:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 18px;margin-bottom:1.5rem;flex-wrap:wrap;}
+.bal-item{display:flex;flex-direction:column;gap:2px;}
+.bal-label{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--hint);}
+.bal-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:500;color:var(--text);}
+.bal-val.pos{color:var(--green);}
+.bal-val.neg{color:var(--red);}
+.bal-divider{width:1px;height:32px;background:var(--border);margin:0 4px;}
+.bal-loading{color:var(--hint);font-family:'JetBrains Mono',monospace;font-size:12px;}
+.wallet-dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
+.header-right{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.status-badge{font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;gap:6px;}
+.status-badge.loading{color:var(--muted);background:var(--surface);}
+.status-badge.ok{color:var(--green);background:var(--green-dim);border-color:rgba(0,212,161,.2);}
+.status-badge.err{color:var(--red);background:var(--red-dim);border-color:rgba(255,77,106,.2);}
+.btn{font-family:'Syne',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;}
+.btn:hover{background:var(--surface);border-color:rgba(255,255,255,.2);}
+.btn.primary{background:var(--green-dim);border-color:rgba(0,212,161,.3);color:var(--green);}
+.btn.primary:hover{background:rgba(0,212,161,.2);}
+.proxy-section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.75rem;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.proxy-label{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;}
+.proxy-input{flex:1;font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);min-width:200px;outline:none;transition:border-color .15s;}
+.proxy-input:focus{border-color:var(--blue);}
+
+/* Metrics grid - 5 main + 4 extra */
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:10px;}
+.metrics-extra{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.75rem;}
+@media(max-width:900px){.metrics{grid-template-columns:repeat(3,1fr);}.metrics-extra{grid-template-columns:repeat(2,1fr);}}
+.mc{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;position:relative;overflow:hidden;transition:border-color .2s;}
+.mc:hover{border-color:var(--border2);}
+.mc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:12px 12px 0 0;}
+.mc.pnl::before{background:linear-gradient(90deg,var(--green),transparent);}
+.mc.wr::before{background:linear-gradient(90deg,var(--blue),transparent);}
+.mc.cnt::before{background:linear-gradient(90deg,var(--purple),transparent);}
+.mc.roi::before{background:linear-gradient(90deg,var(--amber),transparent);}
+.mc.vol::before{background:linear-gradient(90deg,var(--muted),transparent);}
+.mc.avgwin::before{background:linear-gradient(90deg,var(--green),transparent);}
+.mc.avgloss::before{background:linear-gradient(90deg,var(--red),transparent);}
+.mc.best::before{background:linear-gradient(90deg,var(--green),transparent);}
+.mc.worst::before{background:linear-gradient(90deg,var(--red),transparent);}
+.mc-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.mc-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;color:var(--text);line-height:1;margin-bottom:5px;}
+.mc-val.pos{color:var(--green);}
+.mc-val.neg{color:var(--red);}
+.mc-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--hint);}
+
+/* Filter row */
+.filter-row{display:flex;gap:6px;margin-bottom:1.25rem;align-items:center;flex-wrap:wrap;}
+.filter-label{font-size:12px;color:var(--muted);margin-right:4px;}
+.ftab{font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 14px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;}
+.ftab:hover{color:var(--text);border-color:var(--border2);}
+.ftab.on{background:var(--green-dim);color:var(--green);border-color:rgba(0,212,161,.3);}
+.upd{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--hint);margin-left:auto;}
+
+/* Charts */
+.stitle{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--hint);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.stitle::after{content:'';flex:1;height:1px;background:var(--border);}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.75rem;}
+@media(max-width:800px){.chart-grid{grid-template-columns:1fr;}}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem 1.5rem;}
+.chart-card-title{font-size:11px;font-weight:600;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;}
+.chart-wrap{position:relative;width:100%;height:180px;}
+.chart-wrap-tall{position:relative;width:100%;height:180px;}
+
+/* Category section */
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:1.75rem;}
+.cat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;}
+.cat-name{font-size:12px;color:var(--text);font-weight:600;}
+.cat-sub{font-size:10px;color:var(--hint);margin-top:2px;}
+.cat-pnl{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;}
+
+/* Table filters */
+.tbl-filters{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center;}
+.tbl-filter-label{font-size:12px;color:var(--muted);}
+.sf{font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;}
+.sf:hover{color:var(--text);}
+.sf.on{border-color:rgba(255,255,255,.2);color:var(--text);background:var(--surface2);}
+.sf.on.f-win{background:var(--green-dim);color:var(--green);border-color:rgba(0,212,161,.3);}
+.sf.on.f-loss{background:var(--red-dim);color:var(--red);border-color:rgba(255,77,106,.3);}
+.sf.on.f-open{background:var(--blue-dim);color:var(--blue);border-color:rgba(77,159,255,.3);}
+
+/* Hot market highlight */
+.hot-badge{font-size:9px;padding:1px 5px;border-radius:3px;background:var(--amber-dim);color:var(--amber);font-family:'JetBrains Mono',monospace;font-weight:600;margin-left:4px;vertical-align:middle;}
+
+/* Table */
+.tbl-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:1rem;}
+.trow{display:grid;grid-template-columns:1fr 90px 90px 90px 90px;gap:4px;padding:10px 14px;border-bottom:1px solid var(--border);align-items:center;font-size:12px;transition:background .1s;}
+.trow:last-child{border-bottom:none;}
+.trow:hover:not(.hdr){background:rgba(255,255,255,.02);}
+.trow.hdr{background:var(--surface2);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--hint);}
+.market-name{color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;}
+.market-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--hint);margin-top:2px;}
+.pill{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;padding:3px 8px;border-radius:4px;text-align:center;display:inline-block;letter-spacing:.05em;}
+.p-b{background:var(--blue-dim);color:var(--blue);}
+.p-s{background:var(--amber-dim);color:var(--amber);}
+.p-r{background:var(--green-dim);color:var(--green);}
+.p-o{background:rgba(255,255,255,.05);color:var(--hint);}
+.p-loss{background:var(--red-dim);color:var(--red);}
+.ra{text-align:right;}
+.mono{font-family:'JetBrains Mono',monospace;}
+.pp{color:var(--green);font-weight:500;}
+.pn{color:var(--red);font-weight:500;}
+.dim{color:var(--hint);}
+.state-box{padding:3rem 1.5rem;text-align:center;color:var(--muted);font-size:13px;}
+.state-icon{font-size:28px;margin-bottom:10px;display:block;}
+.err-card{background:var(--red-dim);border:1px solid rgba(255,77,106,.2);border-radius:12px;padding:1.5rem;margin-bottom:1rem;}
+.err-title{font-size:14px;font-weight:700;color:var(--red);margin-bottom:8px;}
+.err-msg{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.6;}
+.hint-box{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:14px;}
+.footer{text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--hint);margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);}
+/* Search */
+.search-wrap{position:relative;flex:1;max-width:280px;}
+.search-input{width:100%;font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px 5px 28px;color:var(--text);outline:none;transition:border-color .15s;}
+.search-input:focus{border-color:var(--blue);}
+.search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--hint);pointer-events:none;}
+/* Drawdown alert banner */
+.dd-alert{background:var(--red-dim);border:1px solid rgba(255,77,106,.3);border-radius:10px;padding:10px 16px;margin-bottom:1.25rem;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--red);}
+.dd-alert-icon{font-size:18px;}
+/* Weekday grid */
+.wday-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:1.75rem;}
+.wday-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;}
+.wday-name{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;}
+.wday-wr{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;}
+.wday-pnl{font-family:'JetBrains Mono',monospace;font-size:10px;margin-top:3px;}
+.wday-cnt{font-size:9px;color:var(--hint);margin-top:2px;}
+/* Compare period */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.75rem;}
+.cmp-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;}
+.cmp-title{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+.cmp-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.cmp-row:last-child{border-bottom:none;}
+.cmp-label{color:var(--muted);}
+.cmp-val{font-family:'JetBrains Mono',monospace;font-weight:500;}
+.cmp-up{color:var(--green);}
+.cmp-dn{color:var(--red);}
+/* Break-even */
+.be-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.75rem;}
+.be-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.be-item{text-align:center;min-width:100px;}
+.be-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+.be-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:500;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.spinner{display:inline-block;animation:spin 1s linear infinite;}
+/* NAV Card */
+.nav-card{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;position:relative;overflow:hidden;}
+.nav-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--green),var(--blue),var(--purple));}
+.nav-card-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:1rem;}
+.nav-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;}
+.nav-input-row{display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;}
+.nav-input-label{font-size:10px;color:var(--muted);white-space:nowrap;}
+.nav-input{font-family:'JetBrains Mono',monospace;font-size:14px;background:transparent;border:none;color:var(--text);outline:none;width:80px;text-align:right;}
+.nav-result{display:flex;flex-direction:column;gap:4px;padding:8px 12px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid var(--border);}
+.nav-result-label{font-size:9px;color:var(--hint);text-transform:uppercase;letter-spacing:.06em;}
+.nav-result-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:500;}
+.nav-divider{width:1px;background:var(--border);margin:0 4px;align-self:stretch;}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <div class="logo-area">
+    <div class="logo"><div class="logo-dot"></div>Polymarket P&L</div>
+    <div class="wallet-badge"><div class="wallet-dot"></div><span id="walletDisplay">0x91bc7b692a7087f7cf26e597714a3430e4b028d6</span></div>
+  </div>
+  <div class="header-right">
+    <span id="autoRefreshInfo" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--hint);">Auto-refresh: --s</span>
+    <button class="btn" id="toggleAutoBtn" onclick="toggleAutoRefresh()" style="font-size:11px;padding:5px 11px;color:var(--muted);">⏸ Tắt auto</button>
+    <button class="btn primary" onclick="exportCSV()">⬇ Export CSV</button>
+    <div class="status-badge loading" id="statusBadge"><span class="spinner">◌</span> Đang tải...</div>
+    <button class="btn" onclick="loadData()">↺ Tải lại</button>
+  </div>
+</div>
+
+<div class="proxy-section">
+  <span class="proxy-label">🔗 Proxy URL</span>
+  <input class="proxy-input" id="proxyUrl" value="https://script.google.com/macros/s/AKfycbzLV69aDrDAsuxt_3_SVjGNH3IuO_o1QhmV7FnmuWpttW2cbFCZeeayIKeyHOO2keDRsA/exec" placeholder="Paste Google Apps Script URL...">
+  <button class="btn" onclick="loadData()">→ Kết nối</button>
+</div>
+
+<!-- Balance Bar -->
+<div class="balance-bar" id="balanceBar">
+  <div class="bal-item">
+    <span class="bal-label">💰 Số dư pUSD</span>
+    <span class="bal-val" id="balUsdc"><span class="bal-loading spinner">◌</span></span>
+  </div>
+  <div class="bal-divider"></div>
+  <div class="bal-item">
+    <span class="bal-label">📊 Vốn đang vào lệnh</span>
+    <span class="bal-val" id="balInPlay">--</span>
+  </div>
+  <div class="bal-divider"></div>
+  <div class="bal-item">
+    <span class="bal-label">💎 Unrealized P&L</span>
+    <span class="bal-val" id="balUnreal">--</span>
+  </div>
+  <div class="bal-divider"></div>
+  <div class="bal-item">
+    <span class="bal-label">📈 Tổng tài sản ước tính</span>
+    <span class="bal-val" id="balTotal">--</span>
+  </div>
+  <div style="margin-left:auto;">
+    <button class="btn" onclick="fetchBalance()" style="font-size:11px;padding:4px 10px;">↺ Refresh</button>
+    <span id="balUpd" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--hint);margin-left:8px;"></span>
+  </div>
+</div>
+
+<!-- Metrics row 1: core -->
+<div class="metrics">
+  <div class="mc pnl"><div class="mc-label">Realized P&L</div><div class="mc-val" id="mPnl">--</div><div class="mc-sub" id="mPnlSub">lệnh đã kết thúc</div></div>
+  <div class="mc" style="border-color:rgba(167,139,250,0.3);">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;border-radius:12px 12px 0 0;background:linear-gradient(90deg,var(--purple),transparent);"></div>
+    <div class="mc-label">Unrealized P&L</div>
+    <div class="mc-val" id="mUnreal">--</div>
+    <div class="mc-sub" id="mUnrealSub">vị thế đang mở</div>
+  </div>
+  <div class="mc wr"><div class="mc-label">Win rate</div><div class="mc-val" id="mWr">--</div><div class="mc-sub" id="mWrSub">--</div></div>
+  <div class="mc cnt"><div class="mc-label">Số market</div><div class="mc-val" id="mCnt">--</div><div class="mc-sub" id="mCntSub">--</div></div>
+  <div class="mc roi"><div class="mc-label">ROI (realized)</div><div class="mc-val" id="mRoi">--</div><div class="mc-sub">vốn đã bỏ vào</div></div>
+</div>
+<!-- Total P&L banner -->
+<div id="totalPnlBanner" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 20px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+  <span style="font-size:12px;color:var(--muted);font-weight:600;">TỔNG P&L (Realized + Unrealized)</span>
+  <span id="mTotalPnl" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:500;">--</span>
+  <span id="mTotalSub" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--hint);">--</span>
+</div>
+<!-- NAV / Net P&L Card -->
+<div class="nav-card" id="navCard">
+  <div class="nav-card-title">💼 Net P&L Thực Tế (NAV Method) — Tổng lợi nhuận kể từ khi bắt đầu</div>
+  <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+    <!-- Inputs -->
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div class="nav-input-row">
+        <span class="nav-input-label">💵 Tổng đã nạp vào</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--muted);">$</span>
+        <input class="nav-input" id="navDeposit" type="number" min="0" step="1" value="0" placeholder="0" oninput="saveNAVInputs();calcNAV()">
+      </div>
+      <div class="nav-input-row">
+        <span class="nav-input-label">🏦 Tổng đã rút ra</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--muted);">$</span>
+        <input class="nav-input" id="navWithdraw" type="number" min="0" step="1" value="200" placeholder="0" oninput="saveNAVInputs();calcNAV()">
+      </div>
+      <p style="font-size:10px;color:var(--hint);line-height:1.6;max-width:280px;">Nhập tổng tiền đã nạp vào Polymarket từ đầu và tổng tiền đã rút ra. Dashboard tự tính Net P&L thực tế.</p>
+    </div>
+    <div class="nav-divider"></div>
+    <!-- Results -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;">
+      <div class="nav-result">
+        <span class="nav-result-label">Số dư hiện tại</span>
+        <span class="nav-result-val" id="navBalance">--</span>
+      </div>
+      <div style="display:flex;align-items:center;font-size:16px;color:var(--hint);padding-top:20px;">+</div>
+      <div class="nav-result">
+        <span class="nav-result-label">Đã rút ra</span>
+        <span class="nav-result-val" id="navWithdrawDisplay">--</span>
+      </div>
+      <div style="display:flex;align-items:center;font-size:16px;color:var(--hint);padding-top:20px;">−</div>
+      <div class="nav-result">
+        <span class="nav-result-label">Đã nạp vào</span>
+        <span class="nav-result-val" id="navDepositDisplay">--</span>
+      </div>
+      <div style="display:flex;align-items:center;font-size:20px;color:var(--hint);padding-top:20px;">=</div>
+      <div class="nav-result" style="border-color:rgba(0,212,161,.3);min-width:130px;">
+        <span class="nav-result-label">🎯 Net P&L Thực</span>
+        <span class="nav-result-val" id="navNetPnl">--</span>
+      </div>
+      <div class="nav-result" style="min-width:100px;">
+        <span class="nav-result-label">ROI Thực</span>
+        <span class="nav-result-val" id="navROI">--</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Metrics row 2: extra -->
+<div class="metrics-extra">
+  <div class="mc avgwin"><div class="mc-label">Avg Win</div><div class="mc-val pos" id="mAvgWin">--</div><div class="mc-sub">trung bình mỗi lần thắng</div></div>
+  <div class="mc avgloss"><div class="mc-label">Avg Loss</div><div class="mc-val neg" id="mAvgLoss">--</div><div class="mc-sub">trung bình mỗi lần thua</div></div>
+  <div class="mc best"><div class="mc-label">Best Trade</div><div class="mc-val pos" id="mBest">--</div><div class="mc-sub" id="mBestSub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">--</div></div>
+  <div class="mc worst"><div class="mc-label">Worst Trade</div><div class="mc-val neg" id="mWorst">--</div><div class="mc-sub" id="mWorstSub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">--</div></div>
+  <div class="mc vol"><div class="mc-label">Volume</div><div class="mc-val" id="mVol">--</div><div class="mc-sub">tổng tiền vào lệnh</div></div>
+</div>
+
+<!-- Time filter -->
+<div class="filter-row">
+  <span class="filter-label">Khoảng thời gian</span>
+  <button class="ftab on" data-d="7">7 ngày</button>
+  <button class="ftab" data-d="14">14 ngày</button>
+  <button class="ftab" data-d="30">30 ngày</button>
+  <button class="ftab" data-d="0">Tất cả</button>
+  <span class="upd" id="lastUpd"></span>
+</div>
+
+<!-- Charts: 2 cột -->
+<div class="chart-grid">
+  <div class="chart-card">
+    <div class="chart-card-title">P&L theo ngày (Bar)</div>
+    <div class="chart-wrap"><canvas id="pnlChart"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-card-title">P&L tích lũy (Cumulative)</div>
+    <div class="chart-wrap-tall"><canvas id="cumulChart"></canvas></div>
+  </div>
+</div>
+
+<!-- Category breakdown -->
+<p class="stitle">Phân tích theo danh mục</p>
+<div id="catWrap" class="cat-grid"></div>
+
+<!-- Hot positions -->
+<p class="stitle">Vị thế đang mở lớn nhất</p>
+<div id="hotWrap" style="margin-bottom:1.75rem;"></div>
+
+<!-- Table -->
+<p class="stitle">Lịch sử giao dịch</p>
+<!-- Drawdown alert -->
+<div class="dd-alert" id="ddAlert" style="display:none;">
+  <span class="dd-alert-icon">⚠</span>
+  <span id="ddAlertMsg">Cảnh báo drawdown</span>
+</div>
+
+<!-- Break-even calculator -->
+<p class="stitle">Break-even Analysis</p>
+<div class="be-card" id="beCard">
+  <div class="be-row">
+    <div class="be-item"><div class="be-label">Win Rate hiện tại</div><div class="be-val" id="beWr">--</div></div>
+    <div class="be-item"><div class="be-label">R:R hiện tại</div><div class="be-val" id="beRR">--</div></div>
+    <div class="be-item"><div class="be-label">R:R cần để hòa vốn</div><div class="be-val" id="beMinRR" style="color:var(--amber);">--</div></div>
+    <div class="be-item"><div class="be-label">Win rate cần để hòa vốn</div><div class="be-val" id="beMinWR" style="color:var(--amber);">--</div></div>
+    <div class="be-item"><div class="be-label">EV / lệnh</div><div class="be-val" id="beEV">--</div></div>
+    <div class="be-item"><div class="be-label">Drawdown limit</div>
+      <div style="display:flex;align-items:center;gap:4px;margin-top:4px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:13px;">$</span>
+        <input id="ddLimit" type="number" value="200" min="10" step="10"
+          style="width:70px;font-family:'JetBrains Mono',monospace;font-size:13px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text);outline:none;"
+          onchange="renderAll()">
+        <span style="font-size:10px;color:var(--hint);">/ngày</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- So sánh 2 kỳ -->
+<p class="stitle">So sánh 2 kỳ (Kỳ này vs Kỳ trước)</p>
+<div class="compare-grid" id="compareWrap"></div>
+
+<!-- Thống kê theo thứ -->
+<p class="stitle">Hiệu suất theo ngày trong tuần</p>
+<div class="wday-grid" id="wdayWrap"></div>
+
+<!-- Table -->
+<p class="stitle">Lịch sử giao dịch</p>
+<div class="tbl-filters">
+  <span class="tbl-filter-label">Lọc:</span>
+  <button class="sf on" data-f="all" onclick="setStatusFilter('all',this)">Tất cả</button>
+  <button class="sf f-win" data-f="win" onclick="setStatusFilter('win',this)">✓ Thắng</button>
+  <button class="sf f-loss" data-f="loss" onclick="setStatusFilter('loss',this)">✗ Thua</button>
+  <button class="sf f-open" data-f="open" onclick="setStatusFilter('open',this)">● Đang mở</button>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input class="search-input" id="searchInput" placeholder="Tìm market..." oninput="onSearch()">
+  </div>
+  <span id="tblCount" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--hint);margin-left:auto;"></span>
+</div>
+<div id="tblWrap"><div class="tbl-card"><div class="state-box"><span class="state-icon spinner">◌</span>Đang kết nối proxy...</div></div></div>
+
+<div class="footer">Polymarket P&L Dashboard · data-api.polymarket.com via Google Apps Script proxy</div>
+</div>
+
+<script>
+const WALLET='0x91bc7b692a7087f7cf26e597714a3430e4b028d6';
+let raw=[],days=7,pnlChart=null,cumulChart=null,ddChart=null,unrealizedPnl=0,unrealizedVol=0,positionsData=[],searchQuery='',usdcBalance=0;
+const marketCache={};
+// Set chứa conditionId của các market đang thực sự còn hold token (từ positions API)
+let openPositionIds = new Set();
+let tablePage=0,statusFilter='all',allMarkets=[];
+const PAGE_SIZE=40;
+
+function getProxy(){return document.getElementById('proxyUrl').value.trim();}
+function setSt(cls,html){const el=document.getElementById('statusBadge');el.className='status-badge '+cls;el.innerHTML=html;}
+function getTs(t){return Number(t.timestamp||t.createdAt||t.created_at||0);}
+function filterByDays(arr,d){if(!d)return arr;const cut=Date.now()/1000-d*86400;return arr.filter(t=>getTs(t)>=cut);}
+
+function parseTrade(t){
+  const type=(t.type||'TRADE').toUpperCase();
+  const side=(t.side||'').toUpperCase();
+  const usdcSize=parseFloat(t.usdcSize||t.size||t.amount||0);
+  const price=parseFloat(t.price||0);
+  const title=t.title||t.market||t.question||'—';
+  const conditionId=t.conditionId||'';
+  const outcome=t.outcome||'';
+  const marketKey=conditionId&&outcome?conditionId+'|'+outcome:title;
+  const ts=getTs(t);
+  const date=ts?new Date(ts*1000).toLocaleDateString('vi-VN'):'—';
+  const isRedeem=type==='REDEEM';
+  const isBuy=type==='TRADE'&&side==='BUY';
+  const isSell=type==='TRADE'&&side==='SELL';
+  // Category từ eventSlug
+  const slug=t.eventSlug||t.slug||'';
+  const category=detectCategory(slug,title);
+  return{type,side,usdcSize,price,title,conditionId,outcome,marketKey,date,ts,isRedeem,isBuy,isSell,category};
+}
+
+function detectCategory(slug,title){
+  const s=(slug+' '+title).toLowerCase();
+  if(/nba|nhl|mlb|nfl|soccer|football|basketball|baseball|hockey|epl|ucl|ufc|tennis|golf|mls|nascar/.test(s)) return 'Sports';
+  if(/btc|eth|crypto|bitcoin|ethereum|solana|doge|bnb|xrp|token/.test(s)) return 'Crypto';
+  if(/election|president|senate|congress|trump|biden|democrat|republican|vote|poll/.test(s)) return 'Politics';
+  if(/fed|rate|inflation|gdp|economy|market|stock|dow|nasdaq/.test(s)) return 'Economy';
+  if(/ai|gpt|openai|google|apple|microsoft|meta|amazon|tesla/.test(s)) return 'Tech';
+  if(/weather|hurricane|earthquake|climate/.test(s)) return 'Weather';
+  return 'Other';
+}
+
+function buildMarkets(trades){
+  const mm={};
+
+  // ── Pass 1: BUY/SELL ──────────────────────────────────────────────────────
+  // Key = conditionId|outcome (phân biệt bet 2 chiều cùng game)
+  trades.forEach(t=>{
+    if(t.isRedeem) return;
+    const key=t.marketKey;
+    if(!mm[key]) mm[key]={
+      title:t.title, outcome:t.outcome, conditionId:t.conditionId,
+      category:t.category, date:t.date, ts:t.ts,
+      totalBought:0, totalSold:0, totalRedeemed:0,
+      hasRedeem:false, redeemIsWin:false, avgPrice:0, priceCount:0,
+      firstBuyTs:Infinity
+    };
+    const m=mm[key];
+    if(t.ts>m.ts){m.ts=t.ts;m.date=t.date;}
+    if(t.isBuy){
+      m.totalBought+=t.usdcSize;
+      if(t.price>0){m.avgPrice+=t.price;m.priceCount++;}
+      if(t.ts<m.firstBuyTs) m.firstBuyTs=t.ts;
+    }
+    if(t.isSell) m.totalSold+=t.usdcSize;
+  });
+
+  // ── Pass 2: REDEEM ────────────────────────────────────────────────────────
+  // REDEEM không có outcome → match với bucket theo logic:
+  // 1. Tìm bucket cùng conditionId có totalBought > 0 và chưa có REDEEM
+  // 2. Nếu nhiều candidates → chọn cái có avgPrice nhỏ nhất
+  //    (giá thấp = bet underdog = payout lớn khi thắng → gần với REDEEM payout hơn)
+  // 3. Nếu không có BUY nào → REDEEM từ position cũ, bỏ qua (không tạo bucket ảo)
+  trades.filter(t=>t.isRedeem).sort((a,b)=>a.ts-b.ts).forEach(t=>{
+    const cid=t.conditionId;
+    const redeemAmt=t.usdcSize;
+
+    // Tìm tất cả bucket cùng conditionId có BUY
+    let candidates=Object.values(mm).filter(m=>
+      m.conditionId===cid && m.totalBought>0 && !m.hasRedeem
+    );
+
+    let target=null;
+    if(candidates.length===1){
+      target=candidates[0];
+    } else if(candidates.length>1){
+      // Tính implied cost của REDEEM: nếu thắng $X với price p thì vốn bỏ ra ≈ X*p/(1-p)
+      // Chọn bucket có totalBought gần implied cost nhất
+      // Fallback: chọn bucket có firstBuyTs sớm nhất (bet sớm hơn)
+      const avgPr=candidates.map(m=>m.priceCount>0?m.avgPrice/m.priceCount:0.5);
+      let bestDiff=Infinity;
+      candidates.forEach((m,i)=>{
+        const p=avgPr[i];
+        const impliedCost=p>0&&p<1?redeemAmt*p/(1-p):m.totalBought;
+        const diff=Math.abs(m.totalBought-impliedCost);
+        if(diff<bestDiff){bestDiff=diff;target=m;}
+      });
+    }
+    // Nếu không tìm được → bỏ qua (không tạo phantom bucket)
+
+    if(target){
+      target.totalRedeemed+=redeemAmt;
+      target.hasRedeem=true;
+      // Thắng = nhận về > vốn bỏ ra (không chỉ > 0.01)
+      target.redeemIsWin=redeemAmt>0.01;
+      if(t.ts>target.ts){target.ts=t.ts;target.date=t.date;}
+    }
+  });
+
+  return Object.values(mm).map(m=>{
+    // P&L net = tiền nhận về - vốn bỏ vào
+    const pnl=m.totalSold+m.totalRedeemed-m.totalBought;
+    let status='open';
+    if(m.hasRedeem){
+      status=m.redeemIsWin?'win':'loss';
+    } else if(m.totalSold>0&&m.totalBought===0){
+      status='sold';
+    } else if(openPositionIds.size>0){
+      status=openPositionIds.has(m.conditionId)?'open':'loss';
+    } else if(m.conditionId&&marketCache[m.conditionId]&&marketCache[m.conditionId].closed){
+      status='loss';
+    }
+    return{...m,pnl,status,avgPrice:m.priceCount>0?m.avgPrice/m.priceCount:0};
+  }).sort((a,b)=>b.ts-a.ts);
+}
+
+function calcMetrics(trades,markets){
+  // Tính từ trades (raw) để có volume chính xác
+  const buys=trades.filter(t=>t.isBuy);
+  const sells=trades.filter(t=>t.isSell);
+  const totalBought=buys.reduce((s,t)=>s+t.usdcSize,0);
+
+  // netPnl tính từ markets đã gộp đúng (tránh double-count)
+  const closedMarkets=markets.filter(m=>m.status!=='open');
+  const netPnl=closedMarkets.reduce((s,m)=>s+m.pnl,0);
+
+  const wins=markets.filter(m=>m.status==='win');
+  const losses=markets.filter(m=>m.status==='loss');
+  const resolved=wins.length+losses.length;
+  const wr=resolved?wins.length/resolved*100:null;
+  const roi=totalBought>0?netPnl/totalBought*100:null;
+
+  // avgWin/avgLoss từ P&L market (net)
+  const avgWin=wins.length?wins.reduce((s,m)=>s+m.pnl,0)/wins.length:0;
+  const avgLoss=losses.length?losses.reduce((s,m)=>s+m.pnl,0)/losses.length:0;
+
+  const sorted=[...closedMarkets].sort((a,b)=>b.pnl-a.pnl);
+  const best=sorted[0]||null;
+  const worst=sorted[sorted.length-1]||null;
+  return{netPnl,totalBought,tradeCnt:buys.length+sells.length,marketCnt:markets.length,resolved,winCnt:wins.length,lossCnt:losses.length,wr,roi,avgWin,avgLoss,best,worst};
+}
+
+function renderMetrics(m,d){
+  const p=document.getElementById('mPnl');
+  p.textContent=(m.netPnl>=0?'+ ':'-  ')+'$'+Math.abs(m.netPnl).toFixed(2);
+  p.className='mc-val '+(m.netPnl>=0?'pos':'neg');
+  document.getElementById('mPnlSub').textContent=d?d+' ngày gần đây':'toàn bộ';
+  const w=document.getElementById('mWr');
+  w.textContent=m.wr!==null?m.wr.toFixed(1)+'%':'N/A';
+  w.className='mc-val '+(m.wr===null?'':m.wr>=50?'pos':'neg');
+  document.getElementById('mWrSub').textContent=m.resolved?(m.winCnt+'W / '+m.lossCnt+'L'):'chưa kết thúc';
+  document.getElementById('mCnt').textContent=m.marketCnt;
+  document.getElementById('mCntSub').textContent=m.tradeCnt+' lệnh giao dịch';
+  const r=document.getElementById('mRoi');
+  r.textContent=m.roi!==null?(m.roi>=0?'+ ':'-  ')+Math.abs(m.roi).toFixed(1)+'%':'N/A';
+  r.className='mc-val '+(m.roi===null?'':m.roi>=0?'pos':'neg');
+  document.getElementById('mVol').textContent='$'+m.totalBought.toFixed(2);
+
+  // Unrealized P&L từ positions API
+  const unreal=document.getElementById('mUnreal');
+  unreal.textContent=(unrealizedPnl>=0?'+ ':'- ')+'$'+Math.abs(unrealizedPnl).toFixed(2);
+  unreal.className='mc-val '+(unrealizedPnl>=0?'pos':'neg');
+  document.getElementById('mUnrealSub').textContent=openPositionIds.size+' vị thế đang mở';
+
+  // Banner tổng P&L
+  const banner=document.getElementById('totalPnlBanner');
+  banner.style.display='flex';
+  const totalPnl=m.netPnl+unrealizedPnl;
+  const tp=document.getElementById('mTotalPnl');
+  tp.textContent=(totalPnl>=0?'+ ':'- ')+'$'+Math.abs(totalPnl).toFixed(2);
+  tp.style.color=totalPnl>=0?'var(--green)':'var(--red)';
+  const totalRoi=m.totalBought>0?totalPnl/m.totalBought*100:0;
+  document.getElementById('mTotalSub').textContent='ROI: '+(totalRoi>=0?'+':'')+totalRoi.toFixed(1)+'% · Realized: '+(m.netPnl>=0?'+':'')+'$'+m.netPnl.toFixed(2)+' · Unrealized: '+(unrealizedPnl>=0?'+':'')+'$'+unrealizedPnl.toFixed(2);
+  document.getElementById('mAvgWin').textContent=m.avgWin?'+$'+m.avgWin.toFixed(2):'--';
+  document.getElementById('mAvgLoss').textContent=m.avgLoss?'$'+m.avgLoss.toFixed(2):'--';
+  if(m.best){document.getElementById('mBest').textContent='+$'+m.best.pnl.toFixed(2);document.getElementById('mBestSub').textContent=m.best.title;}
+  if(m.worst){document.getElementById('mWorst').textContent='$'+m.worst.pnl.toFixed(2);document.getElementById('mWorstSub').textContent=m.worst.title;}
+}
+
+function renderCharts(trades,markets){
+  // Bar chart: P&L theo ngày
+  const bd={};
+  trades.forEach(t=>{
+    if(!t.date||t.date==='—') return;
+    if(!bd[t.date]) bd[t.date]=0;
+    if(t.isBuy) bd[t.date]-=t.usdcSize;
+    else if(t.isSell) bd[t.date]+=t.usdcSize;
+    else if(t.isRedeem) bd[t.date]+=t.usdcSize;
+  });
+  const labels=Object.keys(bd).sort((a,b)=>{const f=s=>s.split('/').reverse().join('-');return f(a).localeCompare(f(b));});
+  const vals=labels.map(l=>parseFloat(bd[l].toFixed(2)));
+
+  if(pnlChart) pnlChart.destroy();
+  pnlChart=new Chart(document.getElementById('pnlChart').getContext('2d'),{
+    type:'bar',
+    data:{labels:labels.length?labels:['—'],datasets:[{label:'P&L',data:labels.length?vals:[0],backgroundColor:vals.map(v=>v>=0?'rgba(0,212,161,.7)':'rgba(255,77,106,.7)'),borderRadius:4,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#1a1a24',borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'#6b6b80',bodyColor:'#f0f0f5',titleFont:{family:'JetBrains Mono',size:10},bodyFont:{family:'JetBrains Mono',size:13},callbacks:{label:c=>(c.raw>=0?'+ ':'-  ')+'$'+Math.abs(c.raw).toFixed(2)}}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{family:'JetBrains Mono',size:9},color:'#3d3d50',maxRotation:45,autoSkip:true,maxTicksLimit:10}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{family:'JetBrains Mono',size:9},color:'#3d3d50',callback:v=>'$'+v}}}}
+  });
+
+  // Cumulative P&L line chart
+  let cum=0;
+  const cumLabels=[];
+  const cumVals=[];
+  labels.forEach((l,i)=>{cum+=vals[i];cumLabels.push(l);cumVals.push(parseFloat(cum.toFixed(2)));});
+
+  if(cumulChart) cumulChart.destroy();
+  if(cumLabels.length){
+    const isPositive=cumVals[cumVals.length-1]>=0;
+    const lineColor=isPositive?'#00d4a1':'#ff4d6a';
+    let peak=-Infinity;
+    const ddVals=cumVals.map(v=>{peak=Math.max(peak,v);return parseFloat((v-peak).toFixed(2));});
+    cumulChart=new Chart(document.getElementById('cumulChart').getContext('2d'),{
+      type:'line',
+      data:{labels:cumLabels,datasets:[
+        {label:'Equity',data:cumVals,borderColor:lineColor,backgroundColor:isPositive?'rgba(0,212,161,.08)':'rgba(255,77,106,.08)',borderWidth:2,fill:true,tension:0.3,pointRadius:2,pointHoverRadius:5,yAxisID:'y'},
+        {label:'Drawdown',data:ddVals,borderColor:'rgba(255,77,106,.6)',backgroundColor:'rgba(255,77,106,.06)',borderWidth:1.5,fill:true,tension:0.3,pointRadius:0,borderDash:[4,3],yAxisID:'y2'}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{display:true,position:'top',labels:{color:'#6b6b80',font:{size:9,family:'JetBrains Mono'},boxWidth:10,padding:10}},
+          tooltip:{backgroundColor:'#1a1a24',borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'#6b6b80',bodyColor:'#f0f0f5',titleFont:{family:'JetBrains Mono',size:10},bodyFont:{family:'JetBrains Mono',size:12},callbacks:{label:ctx=>{const v=ctx.raw;return ctx.dataset.label+': '+(v>=0?'+':'')+' $'+Math.abs(v).toFixed(2);}}}
+        },
+        scales:{
+          x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{family:'JetBrains Mono',size:9},color:'#3d3d50',maxRotation:45,autoSkip:true,maxTicksLimit:10}},
+          y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{family:'JetBrains Mono',size:9},color:'#3d3d50',callback:v=>'$'+v},position:'left'},
+          y2:{grid:{display:false},ticks:{font:{family:'JetBrains Mono',size:9},color:'rgba(255,77,106,.6)',callback:v=>'$'+v},position:'right',title:{display:true,text:'DD',color:'rgba(255,77,106,.5)',font:{size:9}}}
+        }
+      }
+    });
+  }
+}
+
+function renderCategory(markets){
+  const wrap=document.getElementById('catWrap');
+  const cats={};
+  markets.forEach(m=>{
+    if(!cats[m.category]) cats[m.category]={pnl:0,win:0,loss:0,open:0,vol:0};
+    const c=cats[m.category];
+    c.vol+=m.totalBought;
+    if(m.status==='win'){c.pnl+=m.pnl;c.win++;}
+    else if(m.status==='loss'){c.pnl+=m.pnl;c.loss++;}
+    else c.open++;
+  });
+  const sorted=Object.entries(cats).sort((a,b)=>b[1].vol-a[1].vol);
+  const icons={'Sports':'⚽','Crypto':'₿','Politics':'🗳','Economy':'📈','Tech':'💻','Weather':'🌤','Other':'◎'};
+  wrap.innerHTML=sorted.map(([name,c])=>{
+    const wr=c.win+c.loss>0?((c.win/(c.win+c.loss))*100).toFixed(0)+'% WR':'';
+    const pnlCls=c.pnl>=0?'pp':'pn';
+    return `<div class="cat-card">
+      <div><div class="cat-name">${icons[name]||'◎'} ${name}</div><div class="cat-sub">${c.win}W/${c.loss}L${c.open?' · '+c.open+' open':''} ${wr?'· '+wr:''}</div></div>
+      <div class="cat-pnl ${pnlCls}">${c.pnl>=0?'+':''}$${c.pnl.toFixed(2)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderHotPositions(markets){
+  const wrap=document.getElementById('hotWrap');
+  const open=markets.filter(m=>m.status==='open'&&m.totalBought>0).sort((a,b)=>b.totalBought-a.totalBought).slice(0,5);
+  if(!open.length){wrap.innerHTML='<p style="font-size:12px;color:var(--hint);">Không có vị thế đang mở.</p>';return;}
+
+  // Map positionsData theo conditionId để lấy unrealized P&L từng vị thế
+  const posMap={};
+  positionsData.forEach(p=>{ if(p.conditionId) posMap[p.conditionId]=p; });
+
+  let html='<div class="tbl-card"><div class="trow hdr" style="grid-template-columns:1fr 90px 80px 80px 100px 100px;"><span>Market</span><span class="ra">Vốn vào</span><span class="ra">Giá mua</span><span class="ra">Giá HT</span><span class="ra">Unrealized</span><span class="ra">Tiềm năng</span></div>';
+  open.forEach(m=>{
+    const mShort=m.title.length>44?m.title.slice(0,42)+'…':m.title;
+    const pos=posMap[m.conditionId]||{};
+    const curPrice=parseFloat(pos.curPrice||pos.currentPrice||0);
+    const cashPnl=parseFloat(pos.cashPnl||0);
+    const pnlCls=cashPnl>=0?'pp':'pn';
+    const upside=m.avgPrice>0?((1-m.avgPrice)*m.totalBought/m.avgPrice).toFixed(2):'--';
+    const outcomeTag=m.outcome?` <span style="font-size:9px;background:var(--blue-dim);color:var(--blue);padding:1px 5px;border-radius:3px;">${m.outcome}</span>`:'';
+    html+=`<div class="trow" style="grid-template-columns:1fr 90px 80px 80px 100px 100px;">
+      <span><div class="market-name">${mShort}${outcomeTag} <span class="hot-badge">HOT</span></div><div class="market-date">${m.date}</div></span>
+      <span class="ra pn mono">-$${m.totalBought.toFixed(2)}</span>
+      <span class="ra mono dim">${m.avgPrice?'$'+m.avgPrice.toFixed(3):'—'}</span>
+      <span class="ra mono dim">${curPrice?'$'+curPrice.toFixed(3):'—'}</span>
+      <span class="ra ${pnlCls} mono">${cashPnl!==0?(cashPnl>=0?'+':'')+' $'+Math.abs(cashPnl).toFixed(2):'—'}</span>
+      <span class="ra pp mono">${upside!=='--'?'+$'+upside:'—'}</span>
+    </div>`;
+  });
+  html+='</div>';
+  wrap.innerHTML=html;
+}
+
+function setStatusFilter(f,btn){
+  statusFilter=f;
+  document.querySelectorAll('.sf').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  tablePage=0;
+  renderTablePage();
+}
+
+function onSearch(){
+  searchQuery=document.getElementById('searchInput').value.toLowerCase().trim();
+  tablePage=0;
+  renderTablePage();
+}
+
+function getFilteredMarkets(){
+  let base=allMarkets;
+  if(statusFilter!=='all') base=base.filter(m=>statusFilter==='open'?m.status==='open':m.status===statusFilter);
+  if(searchQuery) base=base.filter(m=>m.title.toLowerCase().includes(searchQuery)||(m.outcome||'').toLowerCase().includes(searchQuery));
+  return base;
+}
+
+function renderTablePage(){
+  const wrap=document.getElementById('tblWrap');
+  const filtered=getFilteredMarkets();
+  document.getElementById('tblCount').textContent=filtered.length+' market';
+  if(!filtered.length){
+    wrap.innerHTML='<div class="tbl-card"><div class="state-box"><span class="state-icon">◎</span>Không có market nào phù hợp.</div></div>';
+    return;
+  }
+  const totalPages=Math.ceil(filtered.length/PAGE_SIZE);
+  const start=tablePage*PAGE_SIZE;
+  const shown=filtered.slice(start,start+PAGE_SIZE);
+  const spill={win:'<span class="pill p-r">THẮNG</span>',loss:'<span class="pill p-loss">THUA</span>',open:'<span class="pill p-o">ĐANG MỞ</span>',sold:'<span class="pill p-s">ĐÃ BÁN</span>'};
+  let html='<div class="tbl-card"><div class="trow hdr" style="grid-template-columns:1fr 90px 90px 90px 90px;"><span>Market</span><span class="ra">Trạng thái</span><span class="ra">Vốn vào</span><span class="ra">Nhận về</span><span class="ra">P&L</span></div>';
+  shown.forEach(m=>{
+    const mShort=m.title.length>44?m.title.slice(0,42)+'…':m.title;
+    const vonVao=m.totalBought>0?'-$'+m.totalBought.toFixed(2):'—';
+    const nhanVe=(m.totalSold+m.totalRedeemed)>0?'+$'+(m.totalSold+m.totalRedeemed).toFixed(2):'—';
+    const pnlClass=m.pnl>0?'pp':m.pnl<0?'pn':'dim';
+    const pnlText=m.status==='open'?'<span class="dim">—</span>':`<span class="${pnlClass} mono">${m.pnl>=0?'+':''}$${m.pnl.toFixed(2)}</span>`;
+    const outcomeTag=m.outcome?` <span style="font-size:9px;background:var(--blue-dim);color:var(--blue);padding:1px 5px;border-radius:3px;vertical-align:middle;">${m.outcome}</span>`:'';
+    html+=`<div class="trow" style="grid-template-columns:1fr 90px 90px 90px 90px;">
+      <span><div class="market-name" title="${m.title}">${mShort}${outcomeTag}</div><div class="market-date">${m.date}</div></span>
+      <span class="ra">${spill[m.status]||spill.open}</span>
+      <span class="ra mono dim">${vonVao}</span>
+      <span class="ra mono ${(m.totalSold+m.totalRedeemed)>0?'pp':'dim'}">${nhanVe}</span>
+      <span class="ra">${pnlText}</span>
+    </div>`;
+  });
+  html+='</div>';
+  if(totalPages>1){
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px;">';
+    html+=`<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--hint);">${start+1}–${Math.min(start+PAGE_SIZE,filtered.length)} / ${filtered.length} market</span>`;
+    html+='<div style="display:flex;gap:4px;">';
+    const btnStyle=(dis,active)=>`font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid ${active?'rgba(0,212,161,.3)':'var(--border)'};background:${active?'var(--green-dim)':'var(--surface2)'};color:${dis?'var(--hint)':active?'var(--green)':'var(--text)'};cursor:${dis?'default':'pointer'};`;
+    html+=`<button onclick="goPage(0)" ${tablePage===0?'disabled':''} style="${btnStyle(tablePage===0,false)}">«</button>`;
+    html+=`<button onclick="goPage(${tablePage-1})" ${tablePage===0?'disabled':''} style="${btnStyle(tablePage===0,false)}">‹</button>`;
+    const rs=Math.max(0,Math.min(tablePage-2,totalPages-5));
+    for(let i=rs;i<Math.min(totalPages,rs+5);i++){
+      html+=`<button onclick="goPage(${i})" style="${btnStyle(false,i===tablePage)}">${i+1}</button>`;
+    }
+    html+=`<button onclick="goPage(${tablePage+1})" ${tablePage>=totalPages-1?'disabled':''} style="${btnStyle(tablePage>=totalPages-1,false)}">›</button>`;
+    html+=`<button onclick="goPage(${totalPages-1})" ${tablePage>=totalPages-1?'disabled':''} style="${btnStyle(tablePage>=totalPages-1,false)}">»</button>`;
+    html+='</div></div>';
+  }
+  wrap.innerHTML=html;
+}
+
+function goPage(p){tablePage=p;renderTablePage();document.getElementById('tblWrap').scrollIntoView({behavior:'smooth',block:'start'});}
+
+function renderAll(){
+  const filtered=filterByDays(raw,days).map(parseTrade);
+  allMarkets=buildMarkets(filtered);
+  const m=calcMetrics(filtered,allMarkets);
+  renderMetrics(m,days);
+  renderCharts(filtered,allMarkets);
+  renderCategory(allMarkets);
+  renderHotPositions(allMarkets);
+  renderBreakEven(allMarkets);
+  renderWeekday(allMarkets);
+  renderCompare(raw,days);
+  checkDrawdownAlert(filtered,days);
+  updateBalanceBar();
+  calcNAV();
+  tablePage=0;
+  renderTablePage();
+}
+
+// ── Break-even Analysis ─────────────────────────────────────────
+function renderBreakEven(markets){
+  const wins=markets.filter(m=>m.status==='win');
+  const losses=markets.filter(m=>m.status==='loss');
+  const resolved=wins.length+losses.length;
+  if(!resolved) return;
+  const wr=wins.length/resolved;
+  const avgWin=wins.reduce((s,m)=>s+m.pnl,0)/wins.length||0;
+  const avgLoss=Math.abs(losses.reduce((s,m)=>s+m.pnl,0)/losses.length||1);
+  const rr=avgWin/avgLoss;
+  // Min RR để hòa vốn: RR = (1-wr)/wr
+  const minRR=(1-wr)/wr;
+  // Min WR để hòa vốn với RR hiện tại: WR = 1/(1+RR)
+  const minWR=1/(1+rr);
+  const ev=wr*avgWin-(1-wr)*avgLoss;
+  const rrEl=document.getElementById('beRR');
+  const evEl=document.getElementById('beEV');
+  document.getElementById('beWr').textContent=(wr*100).toFixed(1)+'%';
+  rrEl.textContent=rr.toFixed(2)+'x';
+  rrEl.style.color=rr>minRR?'var(--green)':'var(--red)';
+  document.getElementById('beMinRR').textContent=minRR.toFixed(2)+'x';
+  document.getElementById('beMinWR').textContent=(minWR*100).toFixed(1)+'%';
+  evEl.textContent=(ev>=0?'+':'')+' $'+Math.abs(ev).toFixed(2);
+  evEl.style.color=ev>=0?'var(--green)':'var(--red)';
+}
+
+// ── Weekday Analysis ─────────────────────────────────────────────
+function renderWeekday(markets){
+  const wrap=document.getElementById('wdayWrap');
+  const DAYS=['CN','T2','T3','T4','T5','T6','T7'];
+  const stats=Array(7).fill(null).map(()=>({win:0,loss:0,pnl:0}));
+  markets.filter(m=>m.status!=='open'&&m.date&&m.date!=='—').forEach(m=>{
+    const parts=m.date.split('/');
+    if(parts.length<3) return;
+    const d=new Date(parseInt(parts[2]),parseInt(parts[1])-1,parseInt(parts[0]));
+    const dow=d.getDay();
+    stats[dow].pnl+=m.pnl;
+    if(m.status==='win') stats[dow].win++;
+    else stats[dow].loss++;
+  });
+  wrap.innerHTML=DAYS.map((name,i)=>{
+    const s=stats[i];
+    const total=s.win+s.loss;
+    const wr=total?((s.win/total)*100).toFixed(0)+'%':'—';
+    const wrCls=total?(s.win/total>=0.5?'pos':'neg'):'';
+    const pnlCls=s.pnl>=0?'pp':'pn';
+    return `<div class="wday-card">
+      <div class="wday-name">${name}</div>
+      <div class="wday-wr mc-val ${wrCls}" style="font-size:14px;">${wr}</div>
+      <div class="wday-pnl ${pnlCls}">${s.pnl!==0?(s.pnl>=0?'+':'')+' $'+Math.abs(s.pnl).toFixed(0):'$0'}</div>
+      <div class="wday-cnt">${total?total+' lệnh':'chưa có'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Compare 2 periods ────────────────────────────────────────────
+function renderCompare(allTrades,days){
+  const wrap=document.getElementById('compareWrap');
+  if(!days){wrap.innerHTML='<p style="font-size:12px;color:var(--hint);grid-column:1/-1;">Chọn khoảng thời gian cụ thể để so sánh 2 kỳ.</p>';return;}
+  const now=Date.now()/1000;
+  const cur=allTrades.filter(t=>getTs(t)>=now-days*86400);
+  const prev=allTrades.filter(t=>getTs(t)>=now-days*2*86400&&getTs(t)<now-days*86400);
+  function calcPeriod(trades){
+    const parsed=trades.map(parseTrade);
+    const mkts=buildMarkets(parsed);
+    const wins=mkts.filter(m=>m.status==='win');
+    const losses=mkts.filter(m=>m.status==='loss');
+    const res=wins.length+losses.length;
+    const vol=parsed.filter(t=>t.isBuy).reduce((s,t)=>s+t.usdcSize,0);
+    const pnl=mkts.filter(m=>m.status!=='open').reduce((s,m)=>s+m.pnl,0);
+    const wr=res?wins.length/res*100:0;
+    return{pnl,vol,wr,win:wins.length,loss:losses.length,total:mkts.length};
+  }
+  const C=calcPeriod(cur),P=calcPeriod(prev);
+  function row(label,cv,pv,fmt,higherBetter=true){
+    const diff=cv-pv;
+    const better=higherBetter?diff>=0:diff<=0;
+    const diffStr=(diff>=0?'+':'')+fmt(diff);
+    const cls=better?'cmp-up':'cmp-dn';
+    return `<div class="cmp-row"><span class="cmp-label">${label}</span><span class="cmp-val">${fmt(cv)} <span class="${cls}" style="font-size:10px;">(${diffStr})</span></span></div>`;
+  }
+  const fmtPnl=v=>(v>=0?'+':'')+' $'+Math.abs(v).toFixed(2);
+  const fmtPct=v=>v.toFixed(1)+'%';
+  const fmtN=v=>(v>=0?'+':'')+v.toFixed(0);
+  const periodLabel=days===7?'7 ngày':days===14?'14 ngày':'30 ngày';
+  wrap.innerHTML=`
+    <div class="cmp-card">
+      <div class="cmp-title">Kỳ này (${periodLabel} gần nhất)</div>
+      ${row('P&L',C.pnl,P.pnl,fmtPnl)}
+      ${row('Win rate',C.wr,P.wr,fmtPct)}
+      ${row('Số market',C.total,P.total,v=>Math.abs(v).toFixed(0))}
+      ${row('Volume',C.vol,P.vol,v=>'$'+Math.abs(v).toFixed(0))}
+      ${row('W/L',C.win,P.win,fmtN)}
+    </div>
+    <div class="cmp-card">
+      <div class="cmp-title">Kỳ trước (${periodLabel} trước đó)</div>
+      ${row('P&L',P.pnl,C.pnl,fmtPnl)}
+      ${row('Win rate',P.wr,C.wr,fmtPct)}
+      ${row('Số market',P.total,C.total,v=>Math.abs(v).toFixed(0))}
+      ${row('Volume',P.vol,C.vol,v=>'$'+Math.abs(v).toFixed(0))}
+      ${row('W/L',P.win,C.win,fmtN)}
+    </div>`;
+}
+
+// ── Drawdown alert ───────────────────────────────────────────────
+function checkDrawdownAlert(trades,days){
+  const banner=document.getElementById('ddAlert');
+  const limit=parseFloat(document.getElementById('ddLimit').value)||200;
+  // Tính P&L hôm nay
+  const todayStr=new Date().toLocaleDateString('vi-VN');
+  const todayTrades=trades.filter(t=>t.date===todayStr);
+  const todayMkts=buildMarkets(todayTrades);
+  const todayPnl=todayMkts.filter(m=>m.status!=='open').reduce((s,m)=>s+m.pnl,0);
+  // Tính max drawdown trong kỳ
+  const bd={};
+  trades.forEach(t=>{
+    if(!t.date||t.date==='—') return;
+    if(!bd[t.date]) bd[t.date]=0;
+    if(t.isBuy) bd[t.date]-=t.usdcSize;
+    else if(t.isSell||t.isRedeem) bd[t.date]+=t.usdcSize;
+  });
+  const dailyPnls=Object.values(bd);
+  const maxDailyLoss=dailyPnls.length?Math.min(...dailyPnls):0;
+  if(todayPnl<=-limit){
+    banner.style.display='flex';
+    document.getElementById('ddAlertMsg').innerHTML=
+      `<strong>Drawdown cảnh báo!</strong> P&L hôm nay: <strong>$${todayPnl.toFixed(2)}</strong> — đã vượt ngưỡng $${limit}. Nên dừng giao dịch hôm nay và review lại.`;
+  } else {
+    banner.style.display='none';
+  }
+}
+
+// ── Fetch USDC Balance from Polygon ─────────────────────────────
+async function fetchBalance(){
+  const proxy=getProxy();
+  if(!proxy) return;
+  document.getElementById('balUsdc').innerHTML='<span class="bal-loading spinner">◌</span>';
+  try{
+    const res=await fetch(proxy+'?endpoint=usdc');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const json=await res.json();
+    if(json.error) throw new Error(json.error);
+    // result là hex string: 0x000...
+    const hex=json.result||'0x0';
+    // USDC có 6 decimals trên Polygon
+    const raw=parseInt(hex,16);
+    usdcBalance=raw/1e6;
+    const el=document.getElementById('balUsdc');
+    el.textContent='$'+usdcBalance.toFixed(2);
+    el.className='bal-val';
+    // Cập nhật các con số khác
+    updateBalanceBar();
+    document.getElementById('balUpd').textContent='Cập nhật: '+new Date().toLocaleTimeString('vi-VN');
+  }catch(e){
+    document.getElementById('balUsdc').textContent='Lỗi RPC';
+    console.warn('Balance fetch error:',e.message);
+  }
+}
+
+function saveNAVInputs(){
+  try{
+    localStorage.setItem('pm_deposit', document.getElementById('navDeposit').value);
+    localStorage.setItem('pm_withdraw', document.getElementById('navWithdraw').value);
+  }catch(e){}
+}
+
+function loadNAVInputs(){
+  try{
+    const d=localStorage.getItem('pm_deposit');
+    const w=localStorage.getItem('pm_withdraw');
+    if(d) document.getElementById('navDeposit').value=d;
+    if(w) document.getElementById('navWithdraw').value=w;
+  }catch(e){}
+}
+
+function calcNAV(){
+  const deposit=parseFloat(document.getElementById('navDeposit').value)||0;
+  const withdraw=parseFloat(document.getElementById('navWithdraw').value)||0;
+  // Tổng tài sản = số dư pUSD + vốn đang vào lệnh (inPlay) + unrealized
+  const inPlay=allMarkets.filter(m=>m.status==='open').reduce((s,m)=>s+m.totalBought,0);
+  const totalAssets=usdcBalance+inPlay+unrealizedPnl;
+  const netPnl=totalAssets+withdraw-deposit;
+  const roi=deposit>0?netPnl/deposit*100:0;
+
+  // Hiển thị
+  document.getElementById('navBalance').textContent='$'+totalAssets.toFixed(2);
+  document.getElementById('navWithdrawDisplay').textContent='$'+withdraw.toFixed(2);
+  document.getElementById('navDepositDisplay').textContent='$'+deposit.toFixed(2);
+
+  const netEl=document.getElementById('navNetPnl');
+  netEl.textContent=(netPnl>=0?'+':'')+' $'+Math.abs(netPnl).toFixed(2);
+  netEl.style.color=netPnl>=0?'var(--green)':'var(--red)';
+
+  const roiEl=document.getElementById('navROI');
+  roiEl.textContent=(roi>=0?'+':'')+roi.toFixed(1)+'%';
+  roiEl.style.color=roi>=0?'var(--green)':'var(--red)';
+}
+
+function updateBalanceBar(){
+  // Vốn đang vào lệnh = tổng totalBought của các vị thế đang mở
+  const inPlay=allMarkets.filter(m=>m.status==='open').reduce((s,m)=>s+m.totalBought,0);
+  document.getElementById('balInPlay').textContent='$'+inPlay.toFixed(2);
+  // Unrealized
+  const unreal=unrealizedPnl;
+  const unrealEl=document.getElementById('balUnreal');
+  unrealEl.textContent=(unreal>=0?'+':'')+' $'+Math.abs(unreal).toFixed(2);
+  unrealEl.className='bal-val '+(unreal>=0?'pos':'neg');
+  // Tổng tài sản ước tính = USDC còn lại + vốn đang vào lệnh + unrealized
+  const total=usdcBalance+inPlay+unreal;
+  const totalEl=document.getElementById('balTotal');
+  totalEl.textContent='$'+total.toFixed(2);
+  totalEl.className='bal-val '+(total>0?'pos':'');
+  // Cập nhật NAV card
+  calcNAV();
+}
+
+function exportCSV(){
+  if(!allMarkets.length){alert('Chưa có dữ liệu để export.');return;}
+  const headers=['Market','Outcome','Category','Status','Date','Von vao (USD)','Nhan ve (USD)','P&L (USD)','Avg Price'];
+  const rows=allMarkets.map(m=>[
+    '"'+m.title.replace(/"/g,'""')+'"',
+    '"'+(m.outcome||'')+'"',
+    m.category,
+    m.status==='win'?'THANG':m.status==='loss'?'THUA':m.status==='open'?'DANG MO':'DA BAN',
+    m.date,
+    (-m.totalBought).toFixed(2),
+    (m.totalSold+m.totalRedeemed).toFixed(2),
+    m.status==='open'?'':m.pnl.toFixed(2),
+    m.avgPrice?m.avgPrice.toFixed(4):''
+  ].join(','));
+  const csv=[headers.join(','),...rows].join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='polymarket_pnl_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+
+async function isMarketClosed(proxy,conditionId){
+  if(!conditionId) return false;
+  const cached=marketCache[conditionId];
+  if(cached&&Date.now()-cached.checkedAt<300000) return cached.closed;
+  try{
+    const res=await fetch(proxy+'?endpoint=market&conditionId='+conditionId);
+    if(!res.ok) return false;
+    const data=await res.json();
+    const closed=data.closed===true||data.active===false||(data.resolutionTime!=null);
+    marketCache[conditionId]={closed,checkedAt:Date.now()};
+    return closed;
+  }catch(e){return false;}
+}
+
+function showError(title,msg,hint){
+  setSt('err','⚠ Lỗi');
+  document.getElementById('tblWrap').innerHTML=`<div class="err-card"><div class="err-title">⚠ ${title}</div><div class="err-msg">${msg}</div>${hint?'<div class="hint-box">'+hint+'</div>':''}<button class="btn" onclick="loadData()">↺ Thử lại</button></div>`;
+}
+
+async function loadData(){
+  const proxy=getProxy();
+  if(!proxy){showError('Chưa có proxy URL','Paste Google Apps Script URL vào ô phía trên.','');return;}
+  setSt('loading','<span class="spinner">◌</span> Đang tải...');
+  document.getElementById('tblWrap').innerHTML='<div class="tbl-card"><div class="state-box"><span class="state-icon spinner">◌</span>Đang tải toàn bộ lịch sử...</div></div>';
+  try{
+    // Bước 1: Load positions trước để biết đang mở market nào
+    setSt('loading','<span class="spinner">◌</span> Đang tải vị thế...');
+    try{
+      const posRes=await fetch(proxy+'?endpoint=positions');
+      if(posRes.ok){
+        const posJson=await posRes.json();
+        const posData=Array.isArray(posJson)?posJson:(posJson.data||posJson.results||[]);
+        // Market đang mở thật = size > 0.01 và currentValue > 0
+        const myPositions=posData.filter(p=>
+          p.proxyWallet&&p.proxyWallet.toLowerCase()===WALLET.toLowerCase()&&
+          parseFloat(p.size||0)>0.01&&parseFloat(p.currentValue||0)>0.001
+        );
+        openPositionIds=new Set(myPositions.map(p=>p.conditionId).filter(Boolean));
+        // Tính unrealized P&L = tổng cashPnl từ positions API
+        positionsData=myPositions;
+        unrealizedPnl=myPositions.reduce((s,p)=>s+parseFloat(p.cashPnl||0),0);
+        unrealizedVol=myPositions.reduce((s,p)=>s+parseFloat(p.initialValue||p.totalBought||0),0);
+      }
+    }catch(pe){
+      console.warn('Positions API failed, fallback to marketCache',pe);
+      openPositionIds=new Set();
+    }
+
+    // Bước 2: Load activity (toàn bộ lịch sử)
+    const PAGE=500;let allData=[],offset=0,page=1,hasMore=true;
+    while(hasMore){
+      setSt('loading','<span class="spinner">◌</span> Trang '+page+' ('+allData.length+' records)...');
+      const res=await fetch(proxy+'?endpoint=activity&limit='+PAGE+'&offset='+offset);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const json=await res.json();
+      if(json&&json.error) throw new Error(json.error);
+      let pageData=Array.isArray(json)?json:(json.data||json.results||[]);
+      pageData=pageData.filter(t=>!t.proxyWallet||t.proxyWallet.toLowerCase()===WALLET.toLowerCase());
+      allData=allData.concat(pageData);
+      if(pageData.length<PAGE) hasMore=false;
+      else{offset+=PAGE;page++;if(page>10) hasMore=false;}
+    }
+    raw=allData;
+    if(!raw.length){
+      setSt('ok','✓ OK · 0 records');
+      document.getElementById('lastUpd').textContent='Cập nhật: '+new Date().toLocaleTimeString('vi-VN');
+      renderAll();return;
+    }
+    setSt('ok','✓ '+raw.length+' records · Kiểm tra market status...');
+    document.getElementById('lastUpd').textContent='Cập nhật: '+new Date().toLocaleTimeString('vi-VN');
+    renderAll();
+    setSt('ok','✓ '+raw.length+' records · '+openPositionIds.size+' đang mở');
+  }catch(e){
+    let msg=e.message||'Lỗi không xác định',hint='';
+    if(msg.includes('Failed to fetch')||msg.includes('CORS')) hint='→ Mở file HTML bằng Chrome (double-click)<br>→ Kiểm tra "Who has access" = <b>Anyone</b>';
+    else if(msg.includes('401')||msg.includes('403')) hint='→ Script chưa authorize. Vào Apps Script → Deploy → Manage.';
+    showError('Không kết nối được proxy',msg,hint);
+  }
+}
+
+// Time filter tabs
+document.querySelectorAll('.ftab').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.ftab').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    days=parseInt(b.dataset.d)||0;
+    if(raw.length) renderAll();
+  });
+});
+
+// Auto-refresh
+const REFRESH_SEC=60;
+let countdown=REFRESH_SEC,countdownTimer=null,autoEnabled=true;
+function startAutoRefresh(){
+  clearInterval(countdownTimer);countdown=REFRESH_SEC;updateCountdownUI();
+  countdownTimer=setInterval(()=>{countdown--;updateCountdownUI();if(countdown<=0){countdown=REFRESH_SEC;loadData();}},1000);
+}
+function stopAutoRefresh(){clearInterval(countdownTimer);}
+function updateCountdownUI(){
+  const el=document.getElementById('autoRefreshInfo');if(!el)return;
+  el.textContent=autoEnabled?'Auto-refresh: '+countdown+'s':'Auto-refresh: tắt';
+  el.style.color=countdown<=10&&autoEnabled?'var(--amber)':'var(--hint)';
+}
+function toggleAutoRefresh(){
+  autoEnabled=!autoEnabled;
+  const btn=document.getElementById('toggleAutoBtn');
+  if(autoEnabled){startAutoRefresh();btn.textContent='⏸ Tắt auto';btn.style.color='var(--muted)';}
+  else{stopAutoRefresh();btn.textContent='▶ Bật auto';btn.style.color='var(--green)';updateCountdownUI();}
+}
+const _orig=loadData;
+window.loadData=async function(){await _orig();if(autoEnabled) startAutoRefresh();};
+window.addEventListener('load',()=>{loadNAVInputs();loadData();fetchBalance();});
+</script>
+</body>
+</html>
